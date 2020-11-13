@@ -67,8 +67,6 @@ const Input: React.RefForwardingComponent<InputRef, InputProps> = (
     });
   }, [fieldName, registerField]);
 
-  console.log(`${fieldName}: ${error}`);
-
   return (
     <Container isFocused={isFocused} isErrored={!!error}>
       <Icon
