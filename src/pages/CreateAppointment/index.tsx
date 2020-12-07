@@ -1,9 +1,10 @@
 import { useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import CalendarStrip from 'react-native-calendar-strip';
 
-import { isAfter, isSameDay } from 'date-fns';
+import { format, isAfter, isSameDay } from 'date-fns';
 import { useAuth } from '../../hooks/auth';
 import api from '../../services/api';
 
@@ -16,6 +17,7 @@ import {
   BackButton,
   HeaderTitle,
   UserAvatar,
+  Content,
   ProviderListContainer,
   ProvidersList,
   ProviderContainer,
@@ -23,6 +25,14 @@ import {
   ProviderName,
   Calendar,
   Title,
+  Schedule,
+  Section,
+  SectionTitle,
+  SectionContent,
+  Hour,
+  HourText,
+  CreateAppointmentButton,
+  CreateAppointmentText,
 } from './styles';
 
 interface RouteParams {
@@ -49,7 +59,7 @@ interface AvailabilityItem {
 const CreateAppointment: React.FC = () => {
   const route = useRoute();
   const { user } = useAuth();
-  const { goBack } = useNavigation();
+  const { goBack, navigate } = useNavigation();
 
   const routeParams = route.params as RouteParams;
 
@@ -61,8 +71,9 @@ const CreateAppointment: React.FC = () => {
   const [selectedProvider, setSelectedProvider] = useState<string>(
     routeParams.providerId,
   );
-  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedHour, setSelectedHour] = useState(0);
 
   const navigateBack = useCallback(() => {
     goBack();
@@ -73,7 +84,7 @@ const CreateAppointment: React.FC = () => {
   }, []);
 
   const handleSelectDate = useCallback((date: Date) => {
-    setSelectedDate(date);
+    setSelectedDate(new Date(date));
   }, []);
 
   const handleChangeCalendarWeek = useCallback(
@@ -88,13 +99,35 @@ const CreateAppointment: React.FC = () => {
         setSelectedMonth(new Date(startDate));
       }
     },
-    [],
+    [selectedMonth],
   );
+
+  const handleSelectHour = useCallback((hour: number) => {
+    setSelectedHour(hour);
+  }, []);
+
+  const handleCreateAppointment = useCallback(async () => {
+    try {
+      const date = new Date(selectedDate);
+      date.setHours(selectedHour);
+      date.setMinutes(0);
+
+      await api.post(`appointments`, {
+        providerId: selectedProvider,
+        date,
+      });
+
+      navigate('AppointmentCreated', { date: date.getTime() });
+    } catch (err) {
+      Alert.alert(
+        'Erro ao criar agendamento',
+        'Ocorreu um erro ao tentar criar um agendamento. Tente novamente.',
+      );
+    }
+  }, [navigate, selectedDate, selectedHour, selectedProvider]);
 
   const datesBlacklistFunc = useCallback(
     (date) => {
-      // return date.isoWeekday() === 7; // Desabilitar domingos
-
       const dayAvailability = monthAvailability.find((ma) => {
         const dateParsed = new Date(ma.day);
         return isSameDay(dateParsed, new Date(date));
@@ -112,20 +145,6 @@ const CreateAppointment: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // api
-    //   .get(`/providers${selectedProvider}/day-availability`, {
-    //     params: {
-    //       year: selectedDate.getFullYear(),
-    //       month: selectedDate.getMonth() + 1,
-    //       day: selectedDate.getDate(),
-    //     },
-    //   })
-    //   .then((response) => {
-    //     setAvailability(response.data);
-    //   });
-  }, [selectedDate, selectedProvider]);
-
-  useEffect(() => {
     api
       .get(`/providers/${selectedProvider}/week-availability`, {
         params: {
@@ -139,6 +158,52 @@ const CreateAppointment: React.FC = () => {
       });
   }, [selectedMonth, selectedProvider]);
 
+  useEffect(() => {
+    api
+      .get(`/providers/${selectedProvider}/day-availability`, {
+        params: {
+          year: selectedDate.getFullYear(),
+          month: selectedDate.getMonth() + 1,
+          day: selectedDate.getDate(),
+        },
+      })
+      .then((response) => {
+        setAvailability(response.data);
+      });
+  }, [selectedDate, selectedProvider]);
+
+  const morningAvailability = useMemo(() => {
+    return availability
+      .filter(({ hour }) => hour < 12)
+      .map(({ hour, available }) => {
+        return {
+          hour,
+          available,
+          formattedHour: format(new Date().setHours(hour), 'HH:00'),
+        };
+      });
+  }, [availability]);
+
+  const afternoonAvailability = useMemo(() => {
+    return availability
+      .filter(({ hour }) => hour >= 12)
+      .map(({ hour, available }) => {
+        return {
+          hour,
+          available,
+          formattedHour: format(new Date().setHours(hour), 'HH:00'),
+        };
+      });
+  }, [availability]);
+
+  const customDatesStylesFunc = useCallback(() => {
+    return {
+      dateNameStyle: { color: '#f4ede8' },
+      dateNumberStyle: { color: '#f4ede8' },
+      dateContainerStyle: { backgroundColor: '#3e3b47' },
+    };
+  }, []);
+
   return (
     <Container>
       <Header>
@@ -148,87 +213,142 @@ const CreateAppointment: React.FC = () => {
         <HeaderTitle>Agendar Serviço</HeaderTitle>
         <UserAvatar source={{ uri: user.avatarUrl }} />
       </Header>
-      <ProviderListContainer>
-        <ProvidersList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={providers}
-          keyExtractor={(provider) => provider.id}
-          renderItem={({ item: provider }) => (
-            <ProviderContainer
-              onPress={() => handleSelectProvider(provider.id)}
-              selected={selectedProvider === provider.id}
-            >
-              <ProviderAvatar source={{ uri: provider.avatarUrl }} />
-              <ProviderName selected={selectedProvider === provider.id}>
-                {provider.name}
-              </ProviderName>
-            </ProviderContainer>
-          )}
-        />
-      </ProviderListContainer>
-      <Calendar>
-        <Title>Data do serviço:</Title>
-        <CalendarStrip
-          scrollable
-          // calendarAnimation={{ type: 'sequence', duration: 30 }}
-          daySelectionAnimation={{
-            type: 'background',
-            duration: 10,
-            highlightColor: '#ff9000',
-            animType: null,
-            animUpdateType: null,
-            animProperty: null,
-            animSpringDamping: null,
+      <Content>
+        <ProviderListContainer>
+          <ProvidersList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={providers}
+            keyExtractor={(provider) => provider.id}
+            renderItem={({ item: provider }) => (
+              <ProviderContainer
+                onPress={() => handleSelectProvider(provider.id)}
+                selected={selectedProvider === provider.id}
+              >
+                <ProviderAvatar source={{ uri: provider.avatarUrl }} />
+                <ProviderName selected={selectedProvider === provider.id}>
+                  {provider.name}
+                </ProviderName>
+              </ProviderContainer>
+            )}
+          />
+        </ProviderListContainer>
+        <Calendar>
+          <Title>Escolha a data:</Title>
+          <CalendarStrip
+            scrollable
+            calendarAnimation={{ type: 'sequence', duration: 30 }}
+            daySelectionAnimation={{
+              type: 'background',
+              duration: 10,
+              highlightColor: '#ff9000',
+              animType: null,
+              animUpdateType: null,
+              animProperty: null,
+              animSpringDamping: null,
+            }}
+            minDate={new Date()}
+            iconLeft={leftIcon}
+            iconRight={rightIcon}
+            style={{
+              height: 100,
+              paddingTop: 5,
+            }}
+            calendarHeaderStyle={{
+              color: '#f4ede8',
+              fontFamily: 'RobotoSlab-Regular',
+            }}
+            highlightDateNumberStyle={{ color: '#232129' }}
+            highlightDateNameStyle={{
+              color: '#232129',
+              fontWeight: 'bold',
+            }}
+            customDatesStyles={() => customDatesStylesFunc()}
+            disabledDateNameStyle={{ color: '#fefefe' }}
+            disabledDateNumberStyle={{ color: '#fefefe' }}
+            selectedDate={new Date()}
+            onDateSelected={(date) => handleSelectDate(date)}
+            onWeekChanged={(start, end) => handleChangeCalendarWeek(start, end)}
+            datesBlacklist={(date) => datesBlacklistFunc(date)}
+            locale={{
+              name: 'ptBR',
+              config: {
+                months: [
+                  'Janeiro',
+                  'Fevereiro',
+                  'Março',
+                  'Abril',
+                  'Maio',
+                  'Junho',
+                  'Julho',
+                  'Agosto',
+                  'Setembro',
+                  'Outubro',
+                  'Novembro',
+                  'Dezembro',
+                ],
+                weekdaysShort: [
+                  'Dom',
+                  'Seg',
+                  'Ter',
+                  'Qua',
+                  'Qui',
+                  'Sex',
+                  'Sáb',
+                ],
+              },
+            }}
+            // iconContainer={{ flex: 0.1 }}
+          />
+        </Calendar>
+
+        <Schedule>
+          <Title>Escolha o horário:</Title>
+          <Section>
+            <SectionTitle>Manhã</SectionTitle>
+            <SectionContent>
+              {morningAvailability.map(({ hour, formattedHour, available }) => (
+                <Hour
+                  onPress={() => handleSelectHour(hour)}
+                  available={available}
+                  key={formattedHour}
+                  selected={selectedHour === hour}
+                >
+                  <HourText selected={selectedHour === hour}>
+                    {formattedHour}
+                  </HourText>
+                </Hour>
+              ))}
+            </SectionContent>
+          </Section>
+          <Section>
+            <SectionTitle>Tarde</SectionTitle>
+            <SectionContent>
+              {afternoonAvailability.map(
+                ({ hour, formattedHour, available }) => (
+                  <Hour
+                    onPress={() => handleSelectHour(hour)}
+                    available={available}
+                    key={formattedHour}
+                    selected={selectedHour === hour}
+                  >
+                    <HourText selected={selectedHour === hour}>
+                      {formattedHour}
+                    </HourText>
+                  </Hour>
+                ),
+              )}
+            </SectionContent>
+          </Section>
+        </Schedule>
+        <CreateAppointmentButton
+          onPress={() => {
+            handleCreateAppointment();
           }}
-          minDate={new Date()}
-          iconLeft={leftIcon}
-          iconRight={rightIcon}
-          style={{ height: 100, paddingBottom: 5 }}
-          selectedDate={selectedDate}
-          calendarHeaderContainerStyle={{
-            height: 0,
-          }}
-          calendarHeaderStyle={{
-            color: '#f4ede8',
-          }}
-          // calendarColor="#F8d8d8d"
-          dateNumberStyle={{ color: '#f4ede8' }}
-          dateNameStyle={{ color: '#f4ede8' }}
-          highlightDateNumberStyle={{ color: '#232129' }}
-          highlightDateNameStyle={{
-            color: '#232129',
-            fontWeight: 'bold',
-          }}
-          disabledDateNameStyle={{ color: '#fefefe' }}
-          disabledDateNumberStyle={{ color: '#fefefe' }}
-          onDateSelected={handleSelectDate}
-          onWeekChanged={(start, end) => handleChangeCalendarWeek(start, end)}
-          // markedDates={data.formattedDaysOfMonth}
-          datesBlacklist={(date) => datesBlacklistFunc(date)}
-          locale={{
-            name: 'ptBR',
-            config: {
-              months: [
-                'Janeiro',
-                'Fevereiro',
-                'Março',
-                'Abril',
-                'Maio',
-                'Junho',
-                'Julho',
-                'Agosto',
-                'Setembro',
-                'Outubro',
-                'Novembro',
-                'Dezembro',
-              ],
-              weekdaysShort: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
-            },
-          }}
-          // iconContainer={{ flex: 0.1 }}
-        />
-      </Calendar>
+        >
+          <CreateAppointmentText>Agendar</CreateAppointmentText>
+        </CreateAppointmentButton>
+      </Content>
     </Container>
   );
 };
