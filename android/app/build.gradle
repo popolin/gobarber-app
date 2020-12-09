@@ -82,6 +82,7 @@ project.ext.react = [
 ]
 
 apply from: "../../node_modules/react-native/react.gradle"
+apply from: "../../node_modules/react-native-code-push/android/codepush.gradle"
 
 /**
  * Set this to true to create two separate APKs instead of one:
@@ -162,9 +163,15 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            resValue "string", "CodePushDeploymentKey", '""'
+        }
+        releaseStaging {
+            resValue "string", "CodePushDeploymentKey", '"LvKWB0hIXjL1t7LKz5m5NNYF2KxybRGo65P-o"'
+            matchingFallbacks = ['release']
         }
         release {
             // signingConfig signingConfigs.release
+            resValue "string", "CodePushDeploymentKey", '"2SyUwVoUUzYydS2cyGRauky7yN20xnUA6OSd7"'
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
