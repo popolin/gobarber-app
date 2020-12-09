@@ -37,3 +37,16 @@ export const Label = styled.Text`
   opacity: 0.5;
   font-family: 'RobotoSlab-Regular';
 `;
+
+export const ButtonSair = styled.TouchableOpacity`
+  flex: 1;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-top: 36px;
+`;
+
+export const ButtonSairText = styled.Text`
+  color: #999591;
+  margin-right: 5px;
+`;

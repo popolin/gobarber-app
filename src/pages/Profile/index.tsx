@@ -29,6 +29,8 @@ import {
   UserAvatarButton,
   UserAvatar,
   Label,
+  ButtonSair,
+  ButtonSairText,
 } from './styles';
 import { useAuth } from '../../hooks/auth';
 
@@ -41,7 +43,7 @@ interface ProfileFormData {
 }
 
 const Profile: React.FC = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, signOut } = useAuth();
 
   const formRef = useRef<FormHandles>(null);
   const emailInputRef = useRef<TextInput>(null);
@@ -123,6 +125,10 @@ const Profile: React.FC = () => {
     },
     [navigation, updateUser],
   );
+
+  const handleSignOut = useCallback(() => {
+    signOut();
+  }, []);
 
   const handleUpdateAvatar = useCallback(async () => {
     ImagePicker.showImagePicker(
@@ -269,6 +275,10 @@ const Profile: React.FC = () => {
                 Confirmar mudanças
               </Button>
             </Form>
+            <ButtonSair onPress={handleSignOut}>
+              <ButtonSairText>Sair da aplicação</ButtonSairText>
+              <Icon name="log-out" size={16} color="#999591" />
+            </ButtonSair>
           </Container>
         </ScrollView>
       </KeyboardAvoidingView>
